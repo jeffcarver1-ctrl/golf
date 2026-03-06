@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Golf Points League Tracker</title>
+
+<style>
+
+body{
+font-family:Arial;
+max-width:900px;
+margin:auto;
+background:#f4f6f8;
+}
+
+h1{text-align:center;}
+
+input,button{
+padding:8px;
+margin:4px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+background:white;
+margin-top:20px;
+}
+
+th,td{
+border:1px solid #ddd;
+padding:8px;
+text-align:center;
+}
+
+th{
+background:#2e7d32;
+color:white;
+}
+
+.deleteBtn{
+background:#c62828;
+color:white;
+border:none;
+padding:6px 10px;
+cursor:pointer;
+}
+
+.printBtn{
+background:#1565c0;
+color:white;
+border:none;
+padding:8px 12px;
+cursor:pointer;
+}
+
+@media print{
+
+body{
+background:white;
+}
+
+button{
+display:none;
+}
+
+input{
+display:none;
+}
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>⛳ Golf Points League Tracker</h1>
+
+<button class="printBtn" onclick="printPage()">Print Leaderboard</button>
+
+<h3>Add Round</h3>
+
+<input id="player" placeholder="Player Name">
+<input id="date" type="date">
+<input id="points" type="number" placeholder="Total Points">
+
+<button onclick="addScore()">Add Score</button>
+
+<h3>Rounds</h3>
+
+<table id="scoresTable">
+<thead>
+<tr>
+<th>Player</th>
+<th>Date</th>
+<th>Points</th>
+<th>Delete</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<h3>Leaderboard (Last 5 Avg – Max ±3 Change)</h3>
+
+<table id="leaderboard">
+<thead>
+<tr>
+<th>Rank</th>
+<th>Player</th>
+<th>Average</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<script>
+
+let scores = JSON.parse(localStorage.getItem("golfScores")) || []
+let averages = JSON.parse(localStorage.getItem("golfAverages")) || {}
+
+function save(){
+localStorage.setItem("golfScores", JSON.stringify(scores))
+localStorage.setItem("golfAverages", JSON.stringify(averages))
+}
+
+function addScore(){
+
+let player=document.getElementById("player").value.trim().toLowerCase()
+let date=document.getElementById("date").value
+let points=Number(document.getElementById("points").value)
+
+if(!player || !date || !points) return
+
+scores.push({player,date,points})
+
+recalculateAverages()
+
+save()
+render()
+
+}
+
+function deleteScore(index){
+
+scores.splice(index,1)
+
+recalculateAverages()
+
+save()
+render()
+
+}
+
+function printPage(){
+window.print()
+}
+
+function recalculateAverages(){
+
+averages={}
+
+let players={}
+
+scores.forEach(s=>{
+if(!players[s.player]) players[s.player]=[]
+players[s.player].push(s.points)
+})
+
+for(let player in players){
+
+let rounds=players[player]
+let avg=0
+
+for(let i=0;i<rounds.length;i++){
+
+let last5=rounds.slice(Math.max(0,i-4),i+1)
+
+let trueAvg=last5.reduce((a,b)=>a+b,0)/last5.length
+
+if(i===0){
+avg=trueAvg
+}else{
+
+let change=trueAvg-avg
+
+if(change>3) change=3
+if(change<-3) change=-3
+
+avg=avg+change
+
+}
+
+}
+
+averages[player]=avg
+
+}
+
+}
+
+function formatName(name){
+return name.charAt(0).toUpperCase()+name.slice(1)
+}
+
+function render(){
+
+let tbody=document.querySelector("#scoresTable tbody")
+tbody.innerHTML=""
+
+scores.forEach((s,index)=>{
+
+tbody.innerHTML+=`
+<tr>
+<td>${formatName(s.player)}</td>
+<td>${s.date}</td>
+<td>${s.points}</td>
+<td><button class="deleteBtn" onclick="deleteScore(${index})">Delete</button></td>
+</tr>
+`
+
+})
+
+renderLeaderboard()
+
+}
+
+function renderLeaderboard(){
+
+let leaderboard=[]
+
+for(let player in averages){
+
+leaderboard.push({
+player:player,
+avg:averages[player]
+})
+
+}
+
+leaderboard.sort((a,b)=>b.avg-a.avg)
+
+let tbody=document.querySelector("#leaderboard tbody")
+tbody.innerHTML=""
+
+leaderboard.forEach((p,i)=>{
+
+tbody.innerHTML+=`
+<tr>
+<td>${i+1}</td>
+<td>${formatName(p.player)}</td>
+<td>${p.avg.toFixed(2)}</td>
+</tr>
+`
+
+})
+
+}
+
+recalculateAverages()
+render()
+
+</script>
+
+</body>
+</html>
