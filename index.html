@@ -1,268 +1,334 @@
-<!DOCTYPE html>
 
+<!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Golf Points League Tracker</title>
-
-<style>
-
-body{
-font-family:Arial;
-max-width:900px;
-margin:auto;
-background:#f4f6f8;
-}
-
-h1{text-align:center;}
-
-input,button{
-padding:8px;
-margin:4px;
-}
-
-table{
-width:100%;
-border-collapse:collapse;
-background:white;
-margin-top:20px;
-}
-
-th,td{
-border:1px solid #ddd;
-padding:8px;
-text-align:center;
-}
-
-th{
-background:#2e7d32;
-color:white;
-}
-
-.deleteBtn{
-background:#c62828;
-color:white;
-border:none;
-padding:6px 10px;
-cursor:pointer;
-}
-
-.printBtn{
-background:#1565c0;
-color:white;
-border:none;
-padding:8px 12px;
-cursor:pointer;
-}
-
-@media print{
-
-body{
-background:white;
-}
-
-button{
-display:none;
-}
-
-input{
-display:none;
-}
-
-}
-
-</style>
-
+  <meta charset="utf-8" />
+  <title>Golf Points League Tracker</title>
+  <style>
+    body{font-family:Arial;max-width:900px;margin:auto;background:#f4f6f8;}
+    h1{text-align:center;}
+    input,button{padding:8px;margin:4px;}
+    table{width:100%;border-collapse:collapse;background:white;margin-top:20px;}
+    th,td{border:1px solid #ddd;padding:8px;text-align:center;}
+    th{background:#2e7d32;color:white;}
+    .deleteBtn{background:#c62828;color:white;border:none;padding:6px 10px;cursor:pointer;}
+    .printBtn{background:#1565c0;color:white;border:none;padding:8px 12px;cursor:pointer;}
+    .secondaryBtn{background:#455a64;color:white;border:none;padding:8px 12px;cursor:pointer;}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:8px}
+    .meta{font-size:12px;color:#555;margin-top:6px;text-align:center}
+    @media print{
+      body{background:white;}
+      button,.toolbar,.meta,#controls{display:none;}
+      input{display:none;}
+    }
+  </style>
 </head>
-
 <body>
 
-<h1>⛳ Golf Points League Tracker</h1>
+  <h1>⛳ Golf Points League Tracker</h1>
 
-<button class="printBtn" onclick="printPage()">Print Leaderboard</button>
+  <div class="toolbar">
+    <button class="printBtn" onclick="printPage()">Print Leaderboard</button>
+    <button class="secondaryBtn" onclick="exportData()">Export JSON</button>
+    <label class="secondaryBtn" style="cursor:pointer">
+      Import JSON
+      <input id="importFile" type="file" accept="application/json" style="display:none" onchange="importData(event)">
+    </label>
+    <button class="secondaryBtn" onclick="clearAll()">Clear All</button>
+  </div>
 
-<h3>Add Round</h3>
+  <div id="controls">
+    <h3>Add Round</h3>
+    <input id="player" placeholder="Player Name">
+    <input id="date" type="date">
+    <input id="points" type="number" placeholder="Total Points" step="1" inputmode="numeric">
+    <button onclick="addScore()">Add Score</button>
+    <div class="meta" id="status"></div>
+  </div>
 
-<input id="player" placeholder="Player Name">
-<input id="date" type="date">
-<input id="points" type="number" placeholder="Total Points">
+  <h3>Rounds</h3>
+  <table id="scoresTable">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Date</th>
+        <th>Points</th>
+        <th>Delete</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-<button onclick="addScore()">Add Score</button>
-
-<h3>Rounds</h3>
-
-<table id="scoresTable">
-<thead>
-<tr>
-<th>Player</th>
-<th>Date</th>
-<th>Points</th>
-<th>Delete</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<h3>Leaderboard (Last 5 Avg – Max ±3 Change)</h3>
-
-<table id="leaderboard">
-<thead>
-<tr>
-<th>Rank</th>
-<th>Player</th>
-<th>Average</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
+  <h3>Leaderboard (Last 5 Avg – Max ±3 Change)</h3>
+  <table id="leaderboard">
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th>Player</th>
+        <th>Average</th>
+        <th>Rounds</th>
+        <th>Total Points</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
 <script>
+/** ---------- Storage ---------- **/
+const LS_KEYS = {
+  SCORES: "golfScores_v2",
+  NAMES: "golfDisplayNames_v1"
+};
 
-let scores = JSON.parse(localStorage.getItem("golfScores")) || []
-let averages = JSON.parse(localStorage.getItem("golfAverages")) || {}
+// Each score: { id, playerKey, displayName, date (YYYY-MM-DD), points (number) }
+let scores = [];
+// Map of playerKey -> displayName (last seen casing)
+let displayNames = {};
+
+load();
+
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(LS_KEYS.SCORES)) || [];
+    const n = JSON.parse(localStorage.getItem(LS_KEYS.NAMES)) || {};
+    // basic shape guard
+    scores = Array.isArray(s) ? s : [];
+    displayNames = (n && typeof n === "object") ? n : {};
+  }catch(e){
+    scores = [];
+    displayNames = {};
+  }
+}
 
 function save(){
-localStorage.setItem("golfScores", JSON.stringify(scores))
-localStorage.setItem("golfAverages", JSON.stringify(averages))
+  localStorage.setItem(LS_KEYS.SCORES, JSON.stringify(scores));
+  localStorage.setItem(LS_KEYS.NAMES, JSON.stringify(displayNames));
 }
 
+/** ---------- Utils ---------- **/
+function uid(){
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+function toPlayerKey(name){
+  return (name || "").trim().toLowerCase();
+}
+function fmtName(key){
+  // Prefer stored display name; fallback to capitalized key
+  const dn = displayNames[key];
+  if (dn) return dn;
+  if (!key) return "";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+function fmtDate(iso){
+  // Friendly date without time; safe for print
+  try{
+    const [y,m,d] = iso.split("-");
+    return `${y}-${m}-${d}`;
+  }catch{
+    return iso;
+  }
+}
+function setStatus(msg, kind="info"){
+  const el = document.getElementById("status");
+  el.style.color = kind === "error" ? "#c62828" : "#2e7d32";
+  el.textContent = msg;
+  if (msg) setTimeout(()=> el.textContent = "", 2500);
+}
+
+/** ---------- Actions ---------- **/
 function addScore(){
+  const rawName = document.getElementById("player").value.trim();
+  const date = document.getElementById("date").value;
+  const points = Number(document.getElementById("points").value);
 
-let player=document.getElementById("player").value.trim().toLowerCase()
-let date=document.getElementById("date").value
-let points=Number(document.getElementById("points").value)
+  const key = toPlayerKey(rawName);
 
-if(!player || !date || !points) return
+  if (!key){
+    setStatus("Please enter a player name.", "error");
+    return;
+  }
+  if (!date){
+    setStatus("Please select a date.", "error");
+    return;
+  }
+  if (!Number.isFinite(points)){
+    setStatus("Please enter a valid number for points.", "error");
+    return;
+  }
 
-scores.push({player,date,points})
+  // Keep the most recent display casing for this player
+  displayNames[key] = rawName;
 
-recalculateAverages()
+  scores.push({
+    id: uid(),
+    playerKey: key,
+    displayName: rawName,
+    date,
+    points
+  });
 
-save()
-render()
-
+  save();
+  render();
+  // optional: clear inputs
+  document.getElementById("points").value = "";
+  setStatus("Round added.");
 }
 
-function deleteScore(index){
-
-scores.splice(index,1)
-
-recalculateAverages()
-
-save()
-render()
-
+function deleteScore(id){
+  const idx = scores.findIndex(s => s.id === id);
+  if (idx >= 0){
+    scores.splice(idx, 1);
+    save();
+    render();
+  }
 }
 
 function printPage(){
-window.print()
+  window.print();
 }
 
-function recalculateAverages(){
-
-averages={}
-
-let players={}
-
-scores.forEach(s=>{
-if(!players[s.player]) players[s.player]=[]
-players[s.player].push(s.points)
-})
-
-for(let player in players){
-
-let rounds=players[player]
-let avg=0
-
-for(let i=0;i<rounds.length;i++){
-
-let last5=rounds.slice(Math.max(0,i-4),i+1)
-
-let trueAvg=last5.reduce((a,b)=>a+b,0)/last5.length
-
-if(i===0){
-avg=trueAvg
-}else{
-
-let change=trueAvg-avg
-
-if(change>3) change=3
-if(change<-3) change=-3
-
-avg=avg+change
-
+function clearAll(){
+  if (!confirm("This will delete all rounds and names. Continue?")) return;
+  scores = [];
+  displayNames = {};
+  save();
+  render();
 }
 
+function exportData(){
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    scores,
+    displayNames
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "golf-points-league.json";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-averages[player]=avg
-
+function importData(evt){
+  const file = evt.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if (!data || !Array.isArray(data.scores) || typeof data.displayNames !== "object"){
+        alert("Invalid file.");
+        return;
+      }
+      scores = data.scores;
+      displayNames = data.displayNames;
+      save();
+      render();
+      setStatus("Import complete.");
+    }catch(e){
+      alert("Could not parse file.");
+    }
+  };
+  reader.readAsText(file);
+  // reset input so same file can be chosen again
+  evt.target.value = "";
 }
 
+/** ---------- Stats & Leaderboard ---------- **/
+function computeAverages(){
+  // Group player -> rounds
+  const byPlayer = {};
+  for (const s of scores){
+    if (!byPlayer[s.playerKey]) byPlayer[s.playerKey] = [];
+    byPlayer[s.playerKey].push(s);
+  }
+
+  const result = {}; // playerKey -> { avg, rounds, total }
+  for (const key of Object.keys(byPlayer)){
+    // Sort rounds by date ascending to ensure rolling computation is chronological
+    const rounds = byPlayer[key]
+      .slice()
+      .sort((a,b)=> a.date.localeCompare(b.date));
+
+    let runningAvg = 0;
+    let total = 0;
+
+    for (let i = 0; i < rounds.length; i++){
+      const last5 = rounds.slice(Math.max(0, i - 4), i + 1).map(r => r.points);
+      const trueAvg = last5.reduce((a,b)=>a+b, 0) / last5.length;
+
+      if (i === 0){
+        runningAvg = trueAvg;
+      } else {
+        let change = trueAvg - runningAvg;
+        if (change > 3) change = 3;
+        if (change < -3) change = -3;
+        runningAvg = runningAvg + change;
+      }
+      total += rounds[i].points;
+    }
+
+    result[key] = {
+      avg: rounds.length ? runningAvg : 0,
+      rounds: rounds.length,
+      total
+    };
+  }
+  return result;
 }
 
-function formatName(name){
-return name.charAt(0).toUpperCase()+name.slice(1)
-}
-
+/** ---------- Render ---------- **/
 function render(){
+  // Rounds table (render in entry order; could sort if desired)
+  const tbody = document.querySelector("#scoresTable tbody");
+  const rows = [];
+  for (const s of scores){
+    rows.push(
+`<tr>
+  <td>${fmtName(s.playerKey)}</td>
+  <td>${fmtDate(s.date)}</td>
+  <td>${s.points}</td>
+  <td><button class="deleteBtn" onclick="deleteScore('${s.id}')">Delete</button></td>
+</tr>`
+    );
+  }
+  tbody.innerHTML = rows.join("");
 
-let tbody=document.querySelector("#scoresTable tbody")
-tbody.innerHTML=""
+  // Leaderboard
+  const stats = computeAverages();
+  const board = Object.keys(stats)
+    .map(key => ({
+      playerKey: key,
+      display: fmtName(key),
+      avg: stats[key].avg,
+      rounds: stats[key].rounds,
+      total: stats[key].total
+    }))
+    .sort((a,b) => b.avg - a.avg || b.total - a.total || a.display.localeCompare(b.display));
 
-scores.forEach((s,index)=>{
-
-tbody.innerHTML+=`
-<tr>
-<td>${formatName(s.player)}</td>
-<td>${s.date}</td>
-<td>${s.points}</td>
-<td><button class="deleteBtn" onclick="deleteScore(${index})">Delete</button></td>
-</tr>
-`
-
-})
-
-renderLeaderboard()
-
+  const lbody = document.querySelector("#leaderboard tbody");
+  if (board.length === 0){
+    lbody.innerHTML = `<tr><td colspan="5">No data yet. Add rounds to see the leaderboard.</td></tr>`;
+  } else {
+    const lrows = [];
+    board.forEach((p,i) => {
+      lrows.push(
+`<tr>
+  <td>${i+1}</td>
+  <td>${p.display}</td>
+  <td>${p.avg.toFixed(2)}</td>
+  <td>${p.rounds}</td>
+  <td>${p.total}</td>
+</tr>`
+      );
+    });
+    lbody.innerHTML = lrows.join("");
+  }
 }
 
-function renderLeaderboard(){
-
-let leaderboard=[]
-
-for(let player in averages){
-
-leaderboard.push({
-player:player,
-avg:averages[player]
-})
-
-}
-
-leaderboard.sort((a,b)=>b.avg-a.avg)
-
-let tbody=document.querySelector("#leaderboard tbody")
-tbody.innerHTML=""
-
-leaderboard.forEach((p,i)=>{
-
-tbody.innerHTML+=`
-<tr>
-<td>${i+1}</td>
-<td>${formatName(p.player)}</td>
-<td>${p.avg.toFixed(2)}</td>
-</tr>
-`
-
-})
-
-}
-
-recalculateAverages()
-render()
-
+render();
 </script>
-
 </body>
 </html>
