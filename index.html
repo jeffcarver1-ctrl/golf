@@ -238,47 +238,60 @@ function importData(evt){
 
 /** ---------- Stats & Leaderboard ---------- **/
 function computeAverages(){
-  // Group player -> rounds
-  const byPlayer = {};
-  for (const s of scores){
-    if (!byPlayer[s.playerKey]) byPlayer[s.playerKey] = [];
-    byPlayer[s.playerKey].push(s);
-  }
-
-  const result = {}; // playerKey -> { avg, rounds, total }
-  for (const key of Object.keys(byPlayer)){
-    // Sort rounds by date ascending to ensure rolling computation is chronological
-    const rounds = byPlayer[key]
-      .slice()
-      .sort((a,b)=> a.date.localeCompare(b.date));
-
-    let runningAvg = 0;
-    let total = 0;
-
-    for (let i = 0; i < rounds.length; i++){
-      const last5 = rounds.slice(Math.max(0, i - 4), i + 1).map(r => r.points);
-      const trueAvg = last5.reduce((a,b)=>a+b, 0) / last5.length;
-
-      if (i === 0){
-        runningAvg = trueAvg;
-      } else {
-        let change = trueAvg - runningAvg;
-        if (change > 3) change = 3;
-        if (change < -3) change = -3;
-        runningAvg = runningAvg + change;
-      }
-      total += rounds[i].points;
-    }
-
-    result[key] = {
-      avg: rounds.length ? runningAvg : 0,
-      rounds: rounds.length,
-      total
-    };
-  }
-  return result;
+// Group player -> rounds
+const byPlayer = {};
+for (const s of scores){
+if (!byPlayer[s.playerKey]) byPlayer[s.playerKey] = [];
+byPlayer[s.playerKey].push(s);
 }
-
+ 
+const result = {};
+ 
+for (const key of Object.keys(byPlayer)){
+const rounds = byPlayer[key]
+.slice()
+.sort((a,b) => a.date.localeCompare(b.date));
+ 
+let runningAvg = 0;
+let total = 0;
+ 
+for (let i = 0; i < rounds.length; i++){
+const last5 = rounds
+.slice(Math.max(0, i - 4), i + 1)
+.map(r => r.points);
+ 
+const trueAvg =
+last5.reduce((a,b) => a + b, 0) / last5.length;
+ 
+if (i === 0){
+runningAvg = trueAvg;
+} else {
+ 
+// Apply +/-3 cap only once player has at least 4 scores
+if (i + 1 < 4){
+runningAvg = trueAvg;
+} else {
+let change = trueAvg - runningAvg;
+ 
+if (change > 3) change = 3;
+if (change < -3) change = -3;
+ 
+runningAvg = runningAvg + change;
+}
+}
+ 
+total += rounds[i].points;
+}
+ 
+result[key] = {
+avg: rounds.length ? runningAvg : 0,
+rounds: rounds.length,
+total
+};
+}
+ 
+return result;
+}
 /** ---------- Render ---------- **/
 function render(){
   // Rounds table (render in entry order; could sort if desired)
